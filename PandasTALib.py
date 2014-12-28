@@ -13,9 +13,9 @@ function eventually.
 import talib
 
 #TODO
-#Add default values to each call
-#Put in the df splitting logic
-#Put in the df joining logic
+#Add default values to each call -- Done
+#Put in the df splitting logic -- Mostly done
+#Put in the df joining logic -- Mostly done
 #Add a brief explanation of each indicator/other to the docstring for the
 #   indicator/other.  Think, the about/explanation from chartschool.com.
 #Add examples to example.py
@@ -348,7 +348,7 @@ class Momentum(CategoryTemplate):
         return df
 
     def STOCHF(self,
-            df
+            df,
             fastk_period=5,
             fastd_period=3,
             fastd_matype=0):
@@ -585,7 +585,7 @@ class Indicator:
         self.volatility.precompute()
         self.cycle.precompute()
 
-#TODO
+#Mostly done.
 class Overlap(CategoryTemplate):
     '''
     A class to precompute loads of overlap sets
@@ -595,7 +595,13 @@ class Overlap(CategoryTemplate):
     def precompute(self):
         pass
 
-    def BBANDS(self, df):
+    def BBANDS(self,
+            df,
+            key='Close',
+            timeperiod=5,
+            nbdevup=2,
+            nbdevdn=2,
+            matype=0):
         '''
         Bollinger Bands
 
@@ -605,70 +611,204 @@ class Overlap(CategoryTemplate):
             middleband
             lowerband
         '''
-    def DEMA(self, df):
+        npa_result = talib.BBANDS(df[key],
+            timeperiod=timeperiod,
+            nbdevup=nbdevup,
+            nbdevdn=nbdevdn,
+            matype=matype)
+        df['BBANDS'] = npa_result.tolist()
+        return df
+
+    def DEMA(self, df, key='Close', timeperiod=30):
         '''
         Double Exponential Moving Average
         '''
-    def EMA(self, df):
+        npa_result = talib.DEMA(high = df[key],
+                    timeperiod = timeperiod)
+        df['DEMA'] = npa_result.tolist()
+        return df
+
+    def EMA(self, df, key='Close', timeperiod=30):
         '''
         Exponential Moving Average
         '''
-    def HT_TRENDLINE(self, df):
+        npa_result = talib.EMA(high = df[key],
+                    timeperiod = timeperiod)
+        df['EMA'] = npa_result.tolist()
+        return df
+
+    def HT_TRENDLINE(self, df, key='Close'):
         '''
         Hilbert Transform - Instantaneous Trendline
         '''
-    def KAMA(self, df):
+        npa_result = talib.HT_TRENDLINE(high = df[key])
+        df['HT_TRENDLINE'] = npa_result.tolist()
+        return df
+
+    def KAMA(self, df, key='Close', timeperiod=30):
         '''
         Kaufman Adaptive Moving Average
         '''
-    def MA(self, df):
+        npa_result = talib.KAMA(high = df[key],
+                    timeperiod = timeperiod)
+        df['KAMA'] = npa_result.tolist()
+        return df
+
+    def MA(self,
+        df,
+        key='Close',
+        timeperiod=30,
+        matype=0):
         '''
         Moving average
         '''
-    def MAMA(self, df):
+        npa_result = talib.MA(high = df[key],
+                            timeperiod=timeperiod,
+                            matype=matype)
+        df['MA'] = npa_result.tolist()
+        return df
+
+    def MAMA(self,
+            df, key='Close',
+            fastlimit=.5,
+            slowlimit=.05):
         '''
         MESA Adaptive Moving Average
+
+        #TODO
+        Outputs:
+            mama
+            fama
         '''
+        npa_result = talib.MAMA(high = df[key],
+            fastlimit=fastlimit,
+            slowlimit=slowlimit)
+        df['MAMA'] = npa_result.tolist()
+        return df
+
     def MAVP(self, df):
         '''
         Moving average with variable period
+        Inputs:
+            real: (any ndarray)
+            periods: (any ndarray)
+        Parameters:
+            minperiod: 2
+            maxperiod: 30
+            matype: 0 (Simple Moving Average)
         '''
-    def MIDPOINT(self, df):
+        print("TODO - I don't know what this one is for...  need to read")
+        return None
+
+    def MIDPOINT(self, df, keys=['High', 'Low'], timeperiod=14):
         '''
         MidPoint over period
+
+        #TODO check ndarray frame building logic.
+        #TODO here Here
         '''
-    def MIDPRICE(self, df):
+
+        #TODO build the intermediate frame
+        npa_result = talib.MIDPOINT(temp_df,
+                    timeperiod = timeperiod)
+        df['MIDPOINT'] = npa_result.tolist()
+        return df
+
+    def MIDPRICE(self, df, keys=['High', 'Low'], timeperiod = 14):
         '''
         Midpoint Price over period
         '''
-    def SAR(self, df):
+        temp_df = self.MIDPOINT(df, keys, timeperiod)
+        #TODO rename column
+        return df
+
+    def SAR(self, df, acceleration=.02, maximum=.2):
         '''
         Parabolic SAR
         '''
-    def SAREXT(self, df):
+        npa_result = talib.SAR(high = df['High'],
+                    low = df['Low'],
+                    acceleration=acceleration,
+                    maximum=maximum)
+        df['SAR'] = npa_result.tolist()
+
+    def SAREXT(self,
+            df,
+            startvalue=0,
+            offsetonreverse=0,
+            accelerationinitlong=0.02,
+            accelerationlong=0.02,
+            accelerationmaxlong=0.2,
+            accelerationinitshort=0.02,
+            accelerationshort=0.02,
+            accelerationmaxshort=0.2):
         '''
         Parabolic SAR - Extended
+        Outputs:
+            real
         '''
-    def SMA(self, df):
+        npa_result = talib.SAREXT(high = df['High'],
+                    low = df['Low'],
+                    startvalue=startvalue,
+                    offsetonreverse=offsetonreverse,
+                    accelerationinitlong=accelerationinitlong,
+                    accelerationlong=accelerationlong,
+                    accelerationmaxlong=accelerationmaxlong,
+                    accelerationinitshort=accelerationinitshort,
+                    accelerationshort=accelerationshort,
+                    accelerationmaxshort=accelerationmaxshort)
+        df['SAREXT'] = npa_result.tolist()
+        return df
+
+    def SMA(self, df, key='Close', timeperiod=30):
         '''
         Simple Moving Average
+        SMA(real[, timeperiod=?])
+            Simple Moving Average (Overlap Studies)
+            Outputs:
+                real
         '''
-    def T3(self, df):
+        npa_result = talib.SMA(high = df[key],
+                    timeperiod = timeperiod)
+        df['SMA'] = npa_result.tolist()
+        return df
+
+    def T3(self, df, key='Close', timeperiod=5, vfactor=.7):
         '''
         Triple Exponential Moving Average (T3)
         '''
-    def TEMA(self, df):
+        npa_result = talib.T3(high = df[key],
+                    timeperiod = timeperiod,
+                    vfactor = vfactor)
+        df['T3'] = npa_result.tolist()
+        return df
+
+    def TEMA(self, df, key='Close', timeperiod=30):
         '''
         Triple Exponential Moving Average
         '''
-    def TRIMA(self, df):
+        npa_result = talib.TEMA(high = df[key],
+                    timeperiod = timeperiod)
+        df['TEMA'] = npa_result.tolist()
+        return df
+
+    def TRIMA(self, df='Close', timeperiod=30):
         '''
         Triangular Moving Average
         '''
-    def WMA(self, df):
+        npa_result = talib.TRIMA(high = df[key],
+                    timeperiod = timeperiod)
+        df['TRIMA'] = npa_result.tolist()
+        return df
+
+    def WMA(self, df, key='Close', timeperiod=30):
         '''
         Weighted Moving Average
         '''
+        npa_result = talib.WMA(high = df[key],
+                    timeperiod = timeperiod)
+        df['WMA'] = npa_result.tolist()
+        return df
 
 #Done
 class Candlestick(CategoryTemplate):

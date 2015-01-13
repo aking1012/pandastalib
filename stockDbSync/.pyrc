@@ -1,0 +1,25 @@
+#!/usr/bin/env python3
+
+#To use export PYTHONSTARTUP=./.pyrc" in bash before launching the shell.
+
+#Tab completion in the terminal
+import rlcompleter
+import readline
+readline.parse_and_bind("tab: complete")
+
+#Initialize the stocks junk
+#Excessive imports are on purpose...  I import everything you MIGHT need for
+#any particular part of anything.
+
+import pandas, numpy, talib, os, datetime
+
+import urllib.request, datetime, csv
+import pandas.io.data as web
+
+import matplotlib.pyplot as plt
+#from matplotlib.finance import candlestick2
+
+manage_tickers = stockDbSync.ManageTickers()
+abstract = Abstractions(manage_tickers)
+ta = PandasTALib(abstract, talib.abstract.__FUNCTION_NAMES)
+code.interact(local = locals())

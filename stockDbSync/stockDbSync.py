@@ -2,14 +2,19 @@
 
 #TODO add threading/multiprocessing for fetches...
 
-#We'll need all of these, it's simply a work in progress
-import os, datetime
+import os, datetime, csv
 
 #Ignore the pylint warning here...
-import urllib.request, csv
+try:
+    import urllib.request
+except ImportError:
+    import urllib
+
 import pandas.io.data as web
 
 #Classses to run the updates
+#TODO move the things that use the functions instead of the iterators to iterators...
+
 class ManageExchanges:
     '''
     A class to manage fetching all symbols for all exchanges
@@ -30,6 +35,7 @@ class ManageExchanges:
         self.app_stores = os.path.join(home, '.config', 'stockdb')
         #pylint misfires on this one...
         os.makedirs(self.app_stores, exist_ok=True)
+        self.curr_iter = 0
 
     def get_syms(self, exchange_arg=False):
         '''
@@ -76,17 +82,42 @@ class ManageExchanges:
                     #I know it's nasty to have catch-alls
                     pass
 
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        try:
+            retval = self.exchanges[self.curr_iter]
+        except IndexError:
+            raise StopIteration
+        self.curr_iter += 1
+        return retval
+
 class ManageTickers:
     '''
     A way to manage a pile of CSV files.
     '''
-    def __init__(self, exchanges=False):
+    def __init__(self):
         '''
         Nothing going on here, move along...
         '''
-        if not exchanges: exchanges = ManageExchanges()
-        self.exchanges = exchanges
-        self.restrict_exchange = False
+        self.exchanges = ManageExchanges()
+        self.curr_exchange = -1
+        self.curr_ticker = -1
+        self.exchanges_list = []
+        self.syms = {}
+        for exchange, url in self.exchanges:
+            with open(os.path.join(self.exchanges.app_stores, exchange + '.csv'), "r") as my_file:
+                exchange_csv = csv.reader(my_file.readlines(), quotechar='"', delimiter=",")
+                self.exchanges_list.append(exchange)
+                temp = []
+                for item in exchange_csv:
+                    try:
+                        temp.append(item[0])
+                    except:
+                        #I know it's nasty to have catch-alls
+                        pass
+                self.syms[exchange] = temp
 
     def last_trading_day(self):
         '''
@@ -99,7 +130,7 @@ class ManageTickers:
             today = today-datetime.timedelta(days=(6 - today.weekday()))
         return today
 
-    def update_ticker(self, exchange=False, ticker=False):
+    def update(self, exchange=False, ticker=False):
         '''
         The name says it all...    takes the optional arguments exchange and ticker.
 
@@ -133,7 +164,25 @@ class ManageTickers:
                     #I know it's nasty to have catch-alls
                     pass
 
-if __name__ == '__main__':
-    tickers = ManageTickers()
-    tickers.exchanges.get_syms()
-    tickers.update_ticker()
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        #TODO not iterating...
+        #Handle exchange iter
+        if self.curr_ticker == -1:
+            self.curr_exchange +=1
+        try:
+            exch = self.exchanges_list[self.curr_exchange]
+        except:
+            self.curr_exchange = -1
+            self.curr_ticker = -1
+            raise StopIteration
+        #Handle sym iter
+        try:
+            self.curr_ticker+=1
+            sym = self.syms[self.exchanges_list[self.curr_exchange]][self.curr_ticker]
+        except:
+            self.curr_ticker = -1
+            exch, sym = self.__next__()
+        return(exch, sym)

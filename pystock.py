@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import pandas, os, datetime, csv
 
 from .stockDbSync import db, StockTick
@@ -5,13 +7,14 @@ from .stockDbSync import db, StockTick
 #Convenience classes for analysis and testing
 class Abstractions:
     '''
-    A class to hold useful abstractions for things that I'll reuse over and over.
+    A class to hold useful abstractions for things that
+    I'll reuse over and over.
     '''
     def __init__(self, manage_tickers):
         '''
         '''
         home = os.path.expanduser("~")
-        self.app_stores = os.path.join(home, '.config', 'stockdb')
+        self.app_stores = os.path.join(home, '.local', 'share', 'stockdb')
 
         self.ticker = ''
         self.exchange = ''
@@ -21,9 +24,15 @@ class Abstractions:
         self.db = db
 
     def update_tickers(self):
+        #TODO this is now broken, update it a little to unbreak it for performance
+        #benchmark/comparison on multiprocess to non-multiprocess and other
+        #enhancements.
         self.tickers.update()
 
-    def precompute(self, exchange_target=False, ticker_target=False, category=False):
+    def precompute(self,
+                    exchange_target=False,
+                    ticker_target=False,
+                    category=False):
         '''
         TODO move the iteritems thing in to a routine... but that's for later.
         I need desperately to make this work.
@@ -135,8 +144,15 @@ class Abstractions:
         self.db.session.commit()
 
     def save_all_precomputes_sql(self):
-        for exchange, ticker in self.tickers():
+        #TODO add logging and timers
+        for exchange, ticker in self.tickers:
+            print(exchange, ticker)
             self.ticker = ticker
-            self.clean_csv()
+            self.read_csv_sym()
+            try:
+                self.clean_csv()
+            except:
+                pass
+            self.load_all_precomputes_csv()
             self.clean_df()
             self.save_df_sql()

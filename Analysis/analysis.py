@@ -1,5 +1,4 @@
-#The next several classes are just scaffolds with descriptions about how
-#  I intend to use them.
+#!/usr/bin/env python3
 
 import datetime, code, os, talib, pandas, csv
 from talib import abstract
@@ -146,7 +145,6 @@ class Strategies:
         '''
         '''
         pass
-
 
 class Analysis:
     def __init__(self, abstractions):

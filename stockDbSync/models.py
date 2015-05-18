@@ -1,3 +1,8 @@
+"""
+Defines a table to force that talib and other
+precomputes I'm using in to a table.
+"""
+
 from flask import Flask
 from flask.ext.sqlalchemy import SQLAlchemy
 
@@ -11,7 +16,7 @@ class StockTick(db.Model):
 
     Also for use in minimal flask dashboards
     '''
-    __tablename__= 'base_precomputes'
+    __tablename__ = 'base_precomputes'
 
     #Precomputes for
     ACOS = db.Column(db.Float)
@@ -197,11 +202,11 @@ class StockTick(db.Model):
     WMA = db.Column(db.Float)
 
     #Part of the composite primary key
-    DATE = db.Column(db.DateTime, primary_key = True)
+    DATE = db.Column(db.DateTime, primary_key=True)
 
     #Added field, so it can be one huge flat table
     #other part of composite primary key
-    TICKER = db.Column(db.String(10), primary_key = True)
+    TICKER = db.Column(db.String(10), primary_key=True)
 
     #Added fields to put things like price moves as percentages
 

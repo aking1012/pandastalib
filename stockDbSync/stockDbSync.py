@@ -123,9 +123,7 @@ class ManageTickers:
             temp = df.last_valid_index().split('-')
             start_date = datetime.datetime(int(temp[0]), int(temp[1]), int(temp[2]))
             start_date = start_date+datetime.timedelta(days=(1))
-        except OSError:
-            start_date = datetime.datetime(1971, 2, 4)
-        except IndexError:
+        except:
             start_date = datetime.datetime(1971, 2, 4)
         return start_date
 

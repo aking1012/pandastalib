@@ -1,23 +1,13 @@
 from talib import abstract
+import multiprocessing, os, csv, pandas, numpy, datetime
 
-#Still have to inspect and group for the organized abstract API
+#TODO need to play with os.nice
 
 class PandasFunction(abstract.Function):
     def __init__(self, function_name):
-        '''
-        CDLDOJI = PandasFunction('CDLDOJI')
-        #Have to figure out why I have to do this twice...
-        CDLDOJI.set_input_arrays(df)
-        CDLDOJI.set_input_arrays(df)
-        CDLDOJI()
-        '''
         super().__init__(function_name)
 
     def set_input_arrays(self, input_data):
-        '''
-        For whatever reason, I have to run this twice...
-        Bug I need to troubleshoot a bit.
-        '''
         try:
             super().set_input_arrays(input_data)
             return True
@@ -38,9 +28,9 @@ class PandasFunction(abstract.Function):
             name_dict[item] = names_lower[i]
             i+=1
         input_data.rename(columns=name_dict, inplace=True)
+        super().set_input_arrays(input_data[names_lower].values)
         temp = input_data['volume'].values.astype('double')
         input_data['volume'] = temp
-        super().set_input_arrays(input_data[names_lower].values)
         return True
 
 class PandasTALib:
@@ -48,27 +38,32 @@ class PandasTALib:
     A class to hold abstractions to make TALib calls easier.
 
     Currently one argument to __init__ is abstractions.
-
-    The argument abstractions needs to be a class that contains several methods
-    to function properly.  They are currently:
-
-    write_csv_sym
-    read_csv_sym
-    exchange_from_ticker
-    update_tickers
-
-    I provide a basic abstractions class for use if you want it.  It's not how I
-    personally use it, but it's there for portability and testing.
-
-    #TODO add functions in their respective places from here...
+    #TODO move this from a passed in argument to a relative import from util...
     '''
     def __init__(self, abstractions, ta_funcs):
-        self.abstractions = abstractions
+        self.abstract = abstractions
         self.ta_funcs = ta_funcs
+        self.in_q = multiprocessing.Queue()
+        self.out_q = multiprocessing.Queue()
+        self.procs = []
+        self.got_first = False
+        self.app_stores = self.abstract.app_stores
+        self.ticker = ''
+        self.exchange = ''
 
-    def precompute(self, ticker, exchange=False, category=False):
-        if not exchange: exchange = self.abstractions.exchange_from_ticker(ticker)
-        data = self.abstractions.read_csv_sym(ticker, exchange)
+    def read_csv_sym(self, csv_type=False, ticker=False, exchange=False):
+        self.ticker = ticker
+        self.exchange = exchange
+        fname = os.path.join(self.app_stores, exchange, ticker, csv_type + '.csv')
+        try:
+            return pandas.read_csv(fname, index_col=0, sep=',', quotechar='"', header='infer', low_memory=True, parse_dates=True, infer_datetime_format=True)
+        except:
+            return False
+
+    def precompute(self, exchange, ticker):
+        print('precomputing ' + ticker)
+        data = self.read_csv_sym(ticker, ticker, exchange)
+        print('got here')
         try:
             if not data: return
         except ValueError as e:
@@ -78,15 +73,89 @@ class PandasTALib:
             e = e
         for item in self.ta_funcs:
             if item == 'MAVP':
-                #We don't need to do multiple moving averages at once.
                 #Added bonus, we don't have to probe for inputs.  A frame works
                 #all across the board.
-
-                #Set parameters would be nice though.
                 continue
+                #TODO trim extra precomputes - MIN and MAX are computed twice etc...
             temp_func = PandasFunction(item)
-            #Need to figure out why it pukes if I don't call this twice...
-            temp_func.set_input_arrays(data)
-            temp_func.set_input_arrays(data)
-            frame = temp_func()
-            self.abstractions.write_csv_sym(frame, csv_type=item)
+            #in progress
+
+            #Get so far already done
+            try:
+                precomp = pandas.read_csv(os.path.join(self.app_stores, exchange, ticker, item + '.csv'), index_col = 0)
+                start_date = precomp.last_valid_index()
+            except OSError:
+                start_date = str(datetime.datetime(1971, 2, 4))
+            except IndexError:
+                start_date = str(datetime.datetime(1971, 2, 4))
+            #Get lookback
+            lookback = temp_func.lookback + 1
+
+            try:
+                #Slice data to only include lookback required dates
+                index_compute_end = numpy.where(precomp.index==start_date)[0][0]
+            except IndexError:
+                index_compute_end = 0
+            except UnboundLocalError:
+                index_compute_end = 0
+
+            if index_compute_end > lookback:
+                index_compute_start = index_compute_end - lookback
+            else:
+                index_compute_start = 0
+            sliced_input = data.iloc[index_compute_start:-1]
+
+            try:
+                #TODO Need to figure out why it pukes if I don't call this twice...
+                #might have fixed that... need to test.
+                #temp_func.set_input_arrays(data)
+                #temp_func.set_input_arrays(data)
+                temp_func.set_input_arrays(sliced_input)
+                temp_func.set_input_arrays(sliced_input)
+
+                #Compute
+                try:
+                    frame = temp_func()
+                except:
+                    continue
+
+                #Chop off lookback from start of output
+
+                try:
+                    frame.iloc[lookback-1:-1]
+                except IndexError:
+                    continue
+                #Merge new frame and old frame
+                #TODO might need to catch indexerror here
+                try:
+                    df = pandas.concat((precomp, frame))
+                except IndexError:
+                    pass
+                except UnboundLocalError:
+                    df = frame
+                #Write to disk
+                with open(os.path.join(self.app_stores, exchange, ticker, item + '.csv'), 'w') as fname:
+                    frame.to_csv(fname)
+            except TypeError as e:
+                print('Type mismatch on: ' + ticker)
+
+    def multi_precompute_target(self):
+        '''
+        The target function for multiprocessing updates
+        '''
+        while (not self.in_q.empty()) or (not self.got_first):
+            exchange, ticker = self.in_q.get()
+            self.got_first = True
+            self.precompute(exchange, ticker)
+            self.out_q.put((exchange, ticker))
+
+
+    def multi_precompute(self):
+        '''
+        multiprocessing update for base data csv
+        '''
+        self.procs = []
+        for i in range(multiprocessing.cpu_count()):
+            self.procs.append(multiprocessing.Process(target=self.multi_precompute_target))
+        for proc in self.procs:
+            proc.start()

@@ -1,9 +1,19 @@
 #!/usr/bin/env python3
 
 import os, datetime, csv, urllib.request, multiprocessing, pandas
-import pandas.io.data as web
-
+#import pandas.io.data as web
+from pandas_datareader import data as web
 #Classses to run the updates
+class ManageEDGAR:
+    '''
+    A class to manage fundamental data from the SEC EDGAR database
+
+    For the time being, it's just a placeholder...
+    Also sort of like a to do statement.
+    '''
+    def __init__(self):
+        pass
+
 class ManageExchanges:
     '''
     A class to manage fetching all symbols for all exchanges
@@ -66,6 +76,7 @@ class ManageTickers:
         self.in_q = multiprocessing.Queue()
         self.out_q = multiprocessing.Queue()
         self.procs = []
+        self.df = ''
 
         for exchange, url in self.exchanges:
             try:
@@ -98,8 +109,7 @@ class ManageTickers:
         Return a datetime object that holds the last trading day.
         '''
         today = datetime.datetime.today()
-        #TODO Add logic for after 22:00 syncs and make computation fast enough that this is done before I wake up.
-        today = today-datetime.timedelta(days=(1))
+        today = today-datetime.timedelta(hours=(22))
         if today.weekday() > 4:
             today = today-datetime.timedelta(days=(6 - today.weekday()))
         return today
@@ -110,30 +120,35 @@ class ManageTickers:
         '''
         try:
             df = pandas.read_csv(os.path.join(self.exchanges.app_stores, exchange, ticker, ticker + '.csv'), index_col = 0)
-            #TODO set start date for fetch
+            temp = df.last_valid_index().split('-')
+            start_date = datetime.datetime(int(temp[0]), int(temp[1]), int(temp[2]))
+            start_date = start_date+datetime.timedelta(days=(1))
         except OSError:
-            start_date = False
-        return False
+            start_date = datetime.datetime(1971, 2, 4)
+        except IndexError:
+            start_date = datetime.datetime(1971, 2, 4)
+        return start_date
 
     def update(self, exchange, ticker):
         '''
         Exchange and ticker are required arguments now.  Side-effect of going multiprocessing
         '''
-
         sym = ticker
         today = self.last_trading_day()
         end_date = datetime.datetime(today.year, today.month, today.day)
-        start_date = datetime.datetime(1971, 2, 4)
-        #TODO get name of exception with a test run...
-        temp_start = self.last_recorded_day(exchange, ticker)
-        if temp_start:
-            start_date = temp_start
-
+        start_date = self.last_recorded_day(exchange, ticker)
         try:
             df = web.DataReader(ticker, 'yahoo', start_date, end_date)
-            os.makedirs(os.path.join(self.exchanges.app_stores, exchange, ticker), exist_ok=True)
-            with open(os.path.join(self.exchanges.app_stores, exchange, ticker, ticker + '.csv'), 'w') as questionable:
-                df.to_csv(questionable)
+            try:
+                os.makedirs(os.path.join(self.exchanges.app_stores, exchange, ticker), exist_ok=True)
+                with open(os.path.join(self.exchanges.app_stores, exchange, ticker, ticker + '.csv'), 'r') as old_data:
+                    old_df = pandas.DataFrame.from_csv(old_data)
+                    df = pandas.concat((old_df, df))
+                with open(os.path.join(self.exchanges.app_stores, exchange, ticker, ticker + '.csv'), 'w') as questionable:
+                    df.to_csv(questionable)
+            except OSError:
+                with open(os.path.join(self.exchanges.app_stores, exchange, ticker, ticker + '.csv'), 'w') as questionable:
+                    df.to_csv(questionable)
         except OSError:
             pass
 
@@ -147,24 +162,20 @@ class ManageTickers:
             self.update(exchange, ticker)
             self.out_q.put((exchange, ticker))
 
-    def multi_update(self):
+    def multi_update(self, exchange=False, ticker=False):
         '''
         multiprocessing update for base data csv
         '''
         self.procs = []
         for i in range(multiprocessing.cpu_count()):
             self.procs.append(multiprocessing.Process(target=self.multi_update_target))
-        for exchange, ticker in self:
+        if not ticker:
+            for exchange, ticker in self:
+                self.in_q.put((exchange, ticker))
+        else:
             self.in_q.put((exchange, ticker))
         for proc in self.procs:
             proc.start()
-        #Well, multiproc updates is faster, but it blocks on join as implemented...
-        #for proc in self.procs:
-        #    proc.join()
-        #self.procs = []
-        #For now, I just have a couple of procs that live even though they should die.
-        #Just forces me to implement concurrent precomputes and force proc kills
-        #instead of using join.
 
     def __iter__(self):
         return self

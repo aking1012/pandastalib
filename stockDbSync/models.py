@@ -4,15 +4,18 @@ precomputes I'm using in to a table.
 """
 
 from flask import Flask
-from flask.ext.sqlalchemy import SQLAlchemy
+
+import sqlalchemy as SQLAlchemy
+#from flask.ext.sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////tmp/test.db'
-db = SQLAlchemy(app)
+#db = SQLAlchemy(app)
 
 class StockTick(db.Model):
     '''
-    A class to help convert a massive pandas precomputes df to sql records
+    A class to help convert a massive set of pandas precomputes dfs to sql records,
+    and read them back out with Flask.
 
     Also for use in minimal flask dashboards
     '''
@@ -208,9 +211,13 @@ class StockTick(db.Model):
     #other part of composite primary key
     TICKER = db.Column(db.String(10), primary_key=True)
 
+    #Addd field for exchange traded upon
+    EXCHANGE = db.Column(db.String(10))
+
     #Added fields to put things like price moves as percentages
 
-    def __init__(self, index, row):
+    def __init__(self, index, row, exchange):
+        #TODDO add an attr iter
         self.ACOS = row['ACOS']
         self.AD = row['AD']
         self.ADD = row['ADD']
@@ -376,7 +383,78 @@ class StockTick(db.Model):
         self.WILLR = row['WILLR']
         self.WMA = row['WMA']
         self.TICKER = row['TICKER']
+
+        self.EXCHANGE = exchange
         self.DATE = index
+
+    def junk_method(self):
+        import inspect
+
+        def props(obj):
+            pr = {}
+            for name in dir(obj):
+                value = getattr(obj, name)
+                if not name.startswith('__') and not inspect.ismethod(value):
+                    pr[name] = value
+            return pr
+
+    def insert_sqlalchemy_core(self):
+        engine.execute(
+            self.__table__.insert(),
+            [{"name": 'NAME ' + str(i)} for i in range(n)]
+        )
 
     def __repr__(self):
         return 'Not implemented'
+
+
+class StockTicks:
+    '''
+    A class to take a df and iter over rows to do the migration to SQL
+    '''
+    def __init__(self, df):
+        self.df = df
+     #TODO here...
+    def test_sqlalchemy_core(self, n=100000):
+        engine.execute(
+            StockTick.__table__.insert(),
+            [{"name": 'NAME ' + str(i)} for i in range(n)]
+            )
+        print("SQLAlchemy Core: Total time for " + str(n) +
+            " records " + str(time.time() - t0) + " secs")
+
+'''
+import time
+import sqlite3
+
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import Column, Integer, String,  create_engine
+from sqlalchemy.orm import scoped_session, sessionmaker
+
+Base = declarative_base()
+DBSession = scoped_session(sessionmaker())
+engine = None
+
+class Customer(Base):
+    __tablename__ = "customer"
+    id = Column(Integer, primary_key=True)
+    name = Column(String(255))
+
+def init_sqlalchemy(dbname='sqlite:///sqlalchemy.db'):
+    global engine
+    engine = create_engine(dbname, echo=False)
+    DBSession.remove()
+    DBSession.configure(bind=engine, autoflush=False, expire_on_commit=False)
+    Base.metadata.drop_all(engine)
+    Base.metadata.create_all(engine)
+
+def test_sqlalchemy_core(n=100000):
+    init_sqlalchemy()
+    t0 = time.time()
+    engine.execute(
+        Customer.__table__.insert(),
+        [{"name": 'NAME ' + str(i)} for i in range(n)]
+    )
+    print("SQLAlchemy Core: Total time for " + str(n) +
+        " records " + str(time.time() - t0) + " secs")
+'''

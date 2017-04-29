@@ -63,7 +63,6 @@ class PandasTALib:
     def precompute(self, exchange, ticker):
         print('precomputing ' + ticker)
         data = self.read_csv_sym(ticker, ticker, exchange)
-        print('got here')
         try:
             if not data: return
         except ValueError as e:
@@ -79,14 +78,16 @@ class PandasTALib:
                 #TODO trim extra precomputes - MIN and MAX are computed twice etc...
             temp_func = PandasFunction(item)
             #in progress
-
+            append = True
             #Get so far already done
             try:
-                precomp = pandas.read_csv(os.path.join(self.app_stores, exchange, ticker, item + '.csv'), index_col = 0)
+                precomp = pandas.read_csv(os.path.join(self.app_stores, exchange, ticker, item + '.csv'), header=None, names=['Date', '0'], index_col = 0)
                 start_date = precomp.last_valid_index()
             except OSError:
+                append = False
                 start_date = str(datetime.datetime(1971, 2, 4))
             except IndexError:
+                append = False
                 start_date = str(datetime.datetime(1971, 2, 4))
             #Get lookback
             lookback = temp_func.lookback + 1
@@ -122,20 +123,26 @@ class PandasTALib:
                 #Chop off lookback from start of output
 
                 try:
-                    frame.iloc[lookback-1:-1]
+                    frame = frame.iloc[lookback-1:-1]
                 except IndexError:
                     continue
-                #Merge new frame and old frame
-                #TODO might need to catch indexerror here
                 try:
-                    df = pandas.concat((precomp, frame))
+                    index_compute_end = numpy.where(frame.index==start_date)[0][0]
+                    sliced_output = frame.iloc[index_compute_end+1:].copy()
                 except IndexError:
                     pass
                 except UnboundLocalError:
                     df = frame
-                #Write to disk
-                with open(os.path.join(self.app_stores, exchange, ticker, item + '.csv'), 'w') as fname:
-                    frame.to_csv(fname)
+                except:
+                    #If it's a new fetch, it can't find a date, so write the whole frame
+                    append = False
+                if (append):
+                    print('Trying to append')
+                    with open(os.path.join(self.app_stores, exchange, ticker, item + '.csv'), 'a') as fname:
+                        sliced_output.to_csv(fname)
+                else:
+                    with open(os.path.join(self.app_stores, exchange, ticker, item + '.csv'), 'w') as fname:
+                        frame.to_csv(fname)
             except TypeError as e:
                 print('Type mismatch on: ' + ticker)
 
